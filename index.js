@@ -37,13 +37,33 @@ async function run() {
       res.send(services);
     });
 
+    /**
+     * API Naming Convention
+     * app.get('/booking')// get all bookings in this collection or get more then one or by filter
+     * app.get('/booking/:id')// get a specific
+     * app.post('/booking')// add new booking
+     * app.patch('/booking/id')// update a specific booking
+     * app.delete('/booking/id')// delete a specific booking.
+     * */
+
     // Setting the booked appoint
     app.post("/bookAppointment", async (req, res) => {
       const bookedAppointment = req.body;
+      const query = {
+        treatmentName: bookedAppointment.treatmentName,
+        date: bookedAppointment.date,
+        patientEmail: bookedAppointment?.patientEmail,
+      };
+      const exists = await bookedAppointmentCollection.findOne(query);
+
+      if (exists) {
+        return res.send({ success: false, booking: exists });
+      }
+
       const result = await bookedAppointmentCollection.insertOne(
         bookedAppointment
       );
-      res.send(result);
+      res.send({ success: true, result });
     });
   } finally {
     // await client.close();
