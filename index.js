@@ -102,18 +102,40 @@ async function run() {
 
     // Providing a role for a user
 
-    app.put("/user/admin/:email", async (req, res) => {
+    app.put("/user/admin/:email", verifyJWT, async (req, res) => {
       const email = req.params.email;
 
-      const filter = { email: email };
+      const requester = req.decoded.email;
 
-      const updateDoc = {
-        $set: { role: "admin" },
-      };
+      const requesterAccount = await userCollection.findOne({
+        email: requester,
+      });
 
-      const result = await userCollection.updateOne(filter, updateDoc);
+      console.log(requesterAccount);
 
-      res.send(result);
+      if (requesterAccount.role === "admin") {
+        const filter = { email: email };
+
+        const updateDoc = {
+          $set: { role: "admin" },
+        };
+
+        const result = await userCollection.updateOne(filter, updateDoc);
+
+        res.send(result);
+      } else {
+        return res.status(403).send({ message: "forbidden" });
+      }
+    });
+
+    // Getting admin status of and user:
+    app.get("/admin/:email", async (req, res) => {
+      const email = req.params.email;
+      const user = await userCollection.findOne({ email });
+
+      const isAdmin = user.role === "admin";
+
+      res.send({ admin: isAdmin });
     });
 
     app.get("/services", async (req, res) => {
