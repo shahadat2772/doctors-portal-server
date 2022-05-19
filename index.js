@@ -3,7 +3,8 @@ const app = express();
 const port = process.env.PORT || 5000;
 const cors = require("cors");
 require("dotenv").config();
-const { MongoClient, ServerApiVersion } = require("mongodb");
+const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
+const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
 
 const jwt = require("jsonwebtoken");
 
@@ -58,6 +59,11 @@ async function run() {
     // USERS collection
     const doctorCollection = client.db("doctors_portal").collection("doctors");
 
+    // USERS collection
+    const paymentCollection = client
+      .db("doctors_portal")
+      .collection("payments");
+
     // MiddleWere to check the admin status:
     const verifyAdmin = async (req, res, next) => {
       const requester = req.decoded.email;
@@ -72,6 +78,20 @@ async function run() {
         res.status(403).send({ message: "forbidden access" });
       }
     };
+
+    // Payment intent API:
+    app.post("/create-payment-intent", verifyJWT, async (req, res) => {
+      const { price } = req.body;
+      const payableAmount = price * 100;
+
+      const paymentIntents = await stripe.paymentIntents.create({
+        amount: payableAmount,
+        currency: "usd",
+        payment_method_types: ["card"],
+      });
+
+      res.send({ clientSecret: paymentIntents.client_secret });
+    });
 
     // Get booked appointments for particular user
 
@@ -234,6 +254,36 @@ async function run() {
       const filter = { email: email };
       const result = await doctorCollection.deleteOne(filter);
       res.send(result);
+    });
+
+    // GET booking by ID:
+
+    app.get("/booking/:id", verifyJWT, async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: ObjectId(id) };
+      const result = await bookedAppointmentCollection.findOne(query);
+      res.send(result);
+    });
+
+    // update booking:
+
+    app.patch("/booking/:id", async (req, res) => {
+      const id = req.params.id;
+      const { payment } = req.body;
+      const filter = { _id: ObjectId(id) };
+      const updateDoc = {
+        $set: {
+          paid: true,
+          transactionId: payment.transactionId,
+        },
+      };
+      const result = await paymentCollection.insertOne(payment);
+      const updatedBooking = await bookedAppointmentCollection.updateOne(
+        filter,
+        updateDoc
+      );
+
+      res.send(updatedBooking);
     });
   } finally {
     // await client.close();
